@@ -9,9 +9,20 @@
     filteredChannels: [],
     activeChannelId: null,
     favorites: {},
-    settings: { useProxy: false },
+    settings: { useProxy: false, kind: 'all', category: '' },
     hls: null,
+    mpegts: null,
   };
+
+  // ----- Toast -----
+  let toastTimer;
+  function toast(msg, type = 'info') {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.className = 'toast show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+  }
 
   // ----- Storage -----
   const STORAGE_KEY = 'voyager_iptv_v1';
@@ -118,12 +129,12 @@
 
   function renderCategories() {
     const sel = $('#category-select');
-    const cur = sel.value;
+    const cur = state.settings.category || sel.value;
     const kind = currentKind();
     sel.innerHTML = '<option value="">All categories</option>';
     const groups = new Set();
     state.channels.forEach((c) => {
-      if (kind === 'all' || c.kind === kind) groups.add(c.group);
+      if (kind === 'all' || kind === 'fav' || c.kind === kind) groups.add(c.group);
     });
     [...groups].sort().forEach((g) => {
       const opt = document.createElement('option');
@@ -132,6 +143,7 @@
       sel.appendChild(opt);
     });
     sel.value = [...groups].includes(cur) ? cur : '';
+    state.settings.category = sel.value;
     updateKindCounts();
   }
 
@@ -271,27 +283,66 @@
   }
 
   // ----- Player -----
-  function playChannel(c) {
+  function tearDownPlayer() {
+    if (state.hls) {
+      try { state.hls.destroy(); } catch (_) {}
+      state.hls = null;
+    }
+    if (state.mpegts) {
+      try { state.mpegts.destroy(); } catch (_) {}
+      state.mpegts = null;
+    }
+    const video = $('#video');
+    video.removeAttribute('src');
+    video.load();
+  }
+
+  function proxied(u) {
+    return '/proxy?url=' + encodeURIComponent(u);
+  }
+
+  // Live URLs from Xtream often end in .ts (raw MPEG-TS). Browsers can't play
+  // those directly. For live, prefer .m3u8 (HLS) so hls.js can drive playback.
+  function preferHlsForLive(url, kind) {
+    if (kind !== 'live') return url;
+    if (/\.m3u8($|\?)/i.test(url)) return url;
+    if (/\.ts($|\?)/i.test(url)) return url.replace(/\.ts(\?|$)/i, '.m3u8$1');
+    // Xtream "naked" form: /live/user/pass/<id>
+    if (/\/live\/[^/?#]+\/[^/?#]+\/\d+(\?|$|\/)/i.test(url)) {
+      return url.replace(/(\/live\/[^/?#]+\/[^/?#]+\/\d+)(\?|$|\/)/i, '$1.m3u8$2');
+    }
+    return url;
+  }
+
+  function playChannel(c, opts = {}) {
     state.activeChannelId = c.id;
     renderChannels();
     setNowPlaying(c);
     $('#player-overlay').classList.add('hidden');
+    tearDownPlayer();
 
     const video = $('#video');
-    if (state.hls) {
-      state.hls.destroy();
-      state.hls = null;
-    }
+    const forceProxy = !!opts.forceProxy;
+    const useProxy = state.settings.useProxy || forceProxy;
 
-    let url = c.url;
-    if (state.settings.useProxy) {
-      url = '/proxy?url=' + encodeURIComponent(c.url);
-    }
-
+    const hlsUrl = preferHlsForLive(c.url, c.kind);
     const isVodFile = /\.(mp4|mkv|avi|mov|webm|m4v)(\?|$)/i.test(c.url);
     const isHls =
       !isVodFile &&
-      (/\.m3u8($|\?)/i.test(c.url) || /mpegurl/i.test(c.url) || c.kind === 'live');
+      (/\.m3u8($|\?)/i.test(hlsUrl) || /mpegurl/i.test(hlsUrl) || c.kind === 'live');
+    const isMpegTs = !isHls && /\.ts(\?|$)/i.test(c.url);
+
+    const src = useProxy ? proxied(hlsUrl) : hlsUrl;
+    const rawSrc = useProxy ? proxied(c.url) : c.url;
+
+    const retryWithProxy = (reason) => {
+      if (forceProxy || state.settings.useProxy) {
+        toast(`Playback failed: ${reason}. Try a different stream.`, 'error');
+        return;
+      }
+      toast(`Stream blocked — retrying via proxy...`, 'warn');
+      playChannel(c, { forceProxy: true });
+    };
 
     if (isHls && window.Hls && Hls.isSupported()) {
       const hls = new Hls({
@@ -300,24 +351,40 @@
         maxBufferLength: 30,
       });
       state.hls = hls;
-      hls.loadSource(url);
-      hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) {
-          console.warn('HLS fatal error', data);
-          if (!state.settings.useProxy) {
-            console.log('Retrying via proxy...');
-            state.settings.useProxy = true;
-            $('#use-proxy').checked = true;
-            saveStorage();
-            playChannel(c);
-          }
-        }
+        if (!data.fatal) return;
+        console.warn('HLS fatal error', data);
+        retryWithProxy(data.details || 'HLS error');
       });
-    } else {
-      video.src = url;
-      video.play().catch(() => {});
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      return;
     }
+
+    if (isHls && video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari / iOS native HLS
+      video.src = src;
+      video.play().catch(() => retryWithProxy('autoplay blocked'));
+      return;
+    }
+
+    if (isMpegTs && window.mpegts && mpegts.getFeatureList().mseLivePlayback) {
+      const player = mpegts.createPlayer(
+        { type: 'mpegts', isLive: c.kind === 'live', url: rawSrc },
+        { enableWorker: true, lazyLoad: false, liveBufferLatencyChasing: true }
+      );
+      state.mpegts = player;
+      player.attachMediaElement(video);
+      player.load();
+      player.play().catch(() => retryWithProxy('autoplay blocked'));
+      player.on(mpegts.Events.ERROR, () => retryWithProxy('mpegts error'));
+      return;
+    }
+
+    // Direct file (VOD) — let the browser handle it.
+    video.src = rawSrc;
+    video.play().catch(() => retryWithProxy('autoplay blocked'));
+    video.onerror = () => retryWithProxy('media error');
   }
 
   // ----- Playlist management -----
@@ -355,6 +422,7 @@
       return;
     }
     let text = '';
+    $('#loader').classList.remove('hidden');
     try {
       if (pl.type === 'inline') {
         text = pl.text;
@@ -364,10 +432,13 @@
         text = await res.text();
       }
       state.channels = parseM3U(text);
+      toast(`Loaded ${state.channels.length} items from "${pl.name}"`, 'info');
       renderCategories();
       applyFilters();
     } catch (e) {
-      alert('Failed to load playlist: ' + e.message);
+      toast('Failed to load playlist: ' + e.message, 'error');
+    } finally {
+      $('#loader').classList.add('hidden');
     }
   }
 
@@ -500,7 +571,11 @@
     });
 
     $('#search').addEventListener('input', applyFilters);
-    $('#category-select').addEventListener('change', applyFilters);
+    $('#category-select').addEventListener('change', () => {
+      state.settings.category = $('#category-select').value;
+      saveStorage();
+      applyFilters();
+    });
 
     document.querySelectorAll('.kind-tab').forEach((tab) => {
       tab.addEventListener('click', () => {
@@ -508,6 +583,9 @@
           t.classList.remove('active')
         );
         tab.classList.add('active');
+        state.settings.kind = tab.dataset.kind;
+        state.settings.category = '';
+        saveStorage();
         renderCategories();
         applyFilters();
       });
@@ -538,23 +616,61 @@
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      // Esc closes any open modal
+      if (e.key === 'Escape') {
+        $('#modal').classList.add('hidden');
+        $('#settings-modal').classList.add('hidden');
+        $('#sidebar').classList.remove('open');
+      }
+      const inField = e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA';
+      if (inField) return;
       if (e.key === 'f') $('#np-fullscreen').click();
       if (e.key === 'b') $('#np-fav').click();
       if (e.key === '/') {
         e.preventDefault();
         $('#search').focus();
       }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const list = state.filteredChannels;
+        if (!list.length) return;
+        const idx = list.findIndex((c) => c.id === state.activeChannelId);
+        const next = e.key === 'ArrowDown'
+          ? Math.min(list.length - 1, idx + 1)
+          : Math.max(0, idx - 1);
+        if (next !== idx) {
+          playChannel(list[next]);
+          const li = document.querySelector(`#channel-list li[data-id="${list[next].id}"]`);
+          if (li) li.scrollIntoView({ block: 'nearest' });
+        }
+      }
+    });
+
+    // Modal backdrop click to close
+    [$('#modal'), $('#settings-modal')].forEach((m) => {
+      m.addEventListener('click', (e) => {
+        if (e.target === m) m.classList.add('hidden');
+      });
+    });
+
+    // Mobile drawer toggle
+    $('#menu-toggle').addEventListener('click', () => {
+      $('#sidebar').classList.toggle('open');
     });
   }
 
   // ----- Init -----
   loadStorage();
   wire();
+  // Apply saved kind tab selection
+  const savedKind = state.settings.kind || 'all';
+  document.querySelectorAll('.kind-tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.kind === savedKind);
+  });
   renderPlaylistSelect();
   if (state.activePlaylistId) {
-    loadActivePlaylist().then(() => {
-      if (state.channels.length) $('#player-overlay').classList.remove('hidden');
-    });
+    loadActivePlaylist();
+  } else {
+    updateKindCounts();
   }
 })();

@@ -12,10 +12,12 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="stylesheet" href="/style.css" />
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
+        <button id="menu-toggle" class="btn ghost menu-toggle" title="Menu">☰</button>
         <span class="logo">VD</span>
         <h1>Voyager Dreams IPTV</h1>
       </div>
@@ -26,7 +28,7 @@
     </header>
 
     <main class="layout">
-      <aside class="sidebar">
+      <aside id="sidebar" class="sidebar">
         <div class="sidebar-section">
           <label>Playlist</label>
           <select id="playlist-select"></select>
@@ -149,6 +151,9 @@
         <ul id="playlist-manage"></ul>
       </div>
     </div>
+
+    <div id="toast" class="toast"></div>
+    <div id="loader" class="loader hidden"><div class="spinner"></div></div>
 
     <script src="/app.js"></script>
   </body>

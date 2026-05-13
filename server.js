@@ -133,9 +133,11 @@ app.post('/xtream', async (req, res) => {
   } catch {
     return res.status(400).json({ error: 'Invalid host' });
   }
+  // Default to HLS (m3u8) so live channels are browser-playable via hls.js.
+  // Raw .ts MPEG-TS streams can't be played by hls.js or native video tags.
   const m3uUrl = `${base.origin}/get.php?username=${encodeURIComponent(
     username
-  )}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
+  )}&password=${encodeURIComponent(password)}&type=m3u_plus&output=m3u8`;
   res.json({ url: m3uUrl });
 });
 
