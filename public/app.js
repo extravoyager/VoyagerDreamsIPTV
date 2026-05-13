@@ -40,6 +40,16 @@
   }
 
   // ----- M3U Parser -----
+  function detectKind(url, group) {
+    const u = (url || '').toLowerCase();
+    const g = (group || '').toLowerCase();
+    if (/\/series\//.test(u) || /series|tv ?show|temporada|season/.test(g)) return 'series';
+    if (/\/movie\//.test(u) || /\.(mp4|mkv|avi|mov|webm|m4v)(\?|$)/.test(u)) return 'movie';
+    if (/movie|vod|film|cinema|peliculas|películas/.test(g)) return 'movie';
+    if (/\/live\//.test(u) || /\.(m3u8|ts)(\?|$)/.test(u)) return 'live';
+    return 'live';
+  }
+
   function parseM3U(text) {
     const lines = text.split(/\r?\n/);
     const channels = [];
@@ -60,10 +70,12 @@
           group: attrs['group-title'] || 'Uncategorized',
           tvgId: attrs['tvg-id'] || '',
           url: '',
+          kind: 'live',
         };
       } else if (!line.startsWith('#')) {
         if (current) {
           current.url = line;
+          current.kind = detectKind(line, current.group);
           channels.push(current);
           current = null;
         } else {
@@ -73,6 +85,7 @@
             logo: '',
             group: 'Uncategorized',
             url: line,
+            kind: detectKind(line, ''),
           });
         }
       }
@@ -103,22 +116,45 @@
   function renderCategories() {
     const sel = $('#category-select');
     const cur = sel.value;
+    const kind = currentKind();
     sel.innerHTML = '<option value="">All categories</option>';
     const groups = new Set();
-    state.channels.forEach((c) => groups.add(c.group));
+    state.channels.forEach((c) => {
+      if (kind === 'all' || c.kind === kind) groups.add(c.group);
+    });
     [...groups].sort().forEach((g) => {
       const opt = document.createElement('option');
       opt.value = g;
       opt.textContent = g;
       sel.appendChild(opt);
     });
-    sel.value = cur;
+    sel.value = [...groups].includes(cur) ? cur : '';
+    updateKindCounts();
+  }
+
+  function currentKind() {
+    const active = document.querySelector('.kind-tab.active');
+    return active ? active.dataset.kind : 'all';
+  }
+
+  function updateKindCounts() {
+    const counts = { all: state.channels.length, live: 0, movie: 0, series: 0 };
+    state.channels.forEach((c) => {
+      counts[c.kind] = (counts[c.kind] || 0) + 1;
+    });
+    document.querySelectorAll('.kind-tab').forEach((t) => {
+      const k = t.dataset.kind;
+      const c = counts[k] || 0;
+      t.querySelector('.count').textContent = c;
+    });
   }
 
   function applyFilters() {
     const q = $('#search').value.trim().toLowerCase();
     const cat = $('#category-select').value;
+    const kind = currentKind();
     state.filteredChannels = state.channels.filter((c) => {
+      if (kind !== 'all' && c.kind !== kind) return false;
       if (cat && c.group !== cat) return false;
       if (q && !c.name.toLowerCase().includes(q)) return false;
       return true;
@@ -175,8 +211,10 @@
       url = '/proxy?url=' + encodeURIComponent(c.url);
     }
 
+    const isVodFile = /\.(mp4|mkv|avi|mov|webm|m4v)(\?|$)/i.test(c.url);
     const isHls =
-      /\.m3u8($|\?)/i.test(c.url) || /mpegurl/i.test(c.url);
+      !isVodFile &&
+      (/\.m3u8($|\?)/i.test(c.url) || /mpegurl/i.test(c.url) || c.kind === 'live');
 
     if (isHls && window.Hls && Hls.isSupported()) {
       const hls = new Hls({
@@ -386,6 +424,17 @@
 
     $('#search').addEventListener('input', applyFilters);
     $('#category-select').addEventListener('change', applyFilters);
+
+    document.querySelectorAll('.kind-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.kind-tab').forEach((t) =>
+          t.classList.remove('active')
+        );
+        tab.classList.add('active');
+        renderCategories();
+        applyFilters();
+      });
+    });
 
     $('#use-proxy').addEventListener('change', (e) => {
       state.settings.useProxy = e.target.checked;

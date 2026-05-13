@@ -31,9 +31,23 @@
           <label>Playlist</label>
           <select id="playlist-select"></select>
         </div>
+        <div class="kind-tabs">
+          <button class="kind-tab active" data-kind="all">
+            All <span class="count">0</span>
+          </button>
+          <button class="kind-tab" data-kind="live">
+            Live <span class="count">0</span>
+          </button>
+          <button class="kind-tab" data-kind="movie">
+            Movies <span class="count">0</span>
+          </button>
+          <button class="kind-tab" data-kind="series">
+            Series <span class="count">0</span>
+          </button>
+        </div>
         <div class="sidebar-section">
           <label>Search</label>
-          <input id="search" type="search" placeholder="Search channels..." />
+          <input id="search" type="search" placeholder="Search..." />
         </div>
         <div class="sidebar-section">
           <label>Category</label>
@@ -42,7 +56,7 @@
           </select>
         </div>
         <div class="sidebar-section grow">
-          <label>Channels <span id="channel-count" class="muted"></span></label>
+          <label>Items <span id="channel-count" class="muted"></span></label>
           <ul id="channel-list" class="channel-list"></ul>
         </div>
       </aside>

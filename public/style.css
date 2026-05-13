@@ -148,6 +148,41 @@ body {
   border-color: var(--primary);
 }
 
+.kind-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+}
+.kind-tab {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.kind-tab .count {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.kind-tab:hover {
+  background: #22304f;
+  color: var(--text);
+}
+.kind-tab.active {
+  background: var(--primary-2);
+  color: #fff;
+}
+
 .channel-list {
   list-style: none;
   margin: 0;
