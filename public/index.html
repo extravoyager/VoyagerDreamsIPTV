@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b0f1a" />
+    <title>Voyager Dreams IPTV</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">VD</span>
+        <h1>Voyager Dreams IPTV</h1>
+      </div>
+      <div class="actions">
+        <button id="add-playlist-btn" class="btn">+ Playlist</button>
+        <button id="settings-btn" class="btn ghost" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <label>Playlist</label>
+          <select id="playlist-select"></select>
+        </div>
+        <div class="sidebar-section">
+          <label>Search</label>
+          <input id="search" type="search" placeholder="Search channels..." />
+        </div>
+        <div class="sidebar-section">
+          <label>Category</label>
+          <select id="category-select">
+            <option value="">All categories</option>
+          </select>
+        </div>
+        <div class="sidebar-section grow">
+          <label>Channels <span id="channel-count" class="muted"></span></label>
+          <ul id="channel-list" class="channel-list"></ul>
+        </div>
+      </aside>
+
+      <section class="player-area">
+        <div class="player-wrap">
+          <video id="video" controls playsinline autoplay></video>
+          <div id="player-overlay" class="overlay">
+            <div class="overlay-inner">
+              <h2>Welcome to Voyager Dreams IPTV</h2>
+              <p>Add an M3U playlist or Xtream Codes account to get started.</p>
+              <button class="btn primary" id="overlay-add">Add Playlist</button>
+            </div>
+          </div>
+        </div>
+        <div class="now-playing">
+          <div id="np-logo" class="np-logo"></div>
+          <div class="np-meta">
+            <div id="np-name" class="np-name">Nothing playing</div>
+            <div id="np-group" class="np-group muted"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Add Playlist Modal -->
+    <div id="modal" class="modal hidden">
+      <div class="modal-card">
+        <header>
+          <h3>Add a playlist</h3>
+          <button class="btn ghost" id="modal-close">✕</button>
+        </header>
+        <div class="tabs">
+          <button class="tab active" data-tab="m3u">M3U URL</button>
+          <button class="tab" data-tab="xtream">Xtream Codes</button>
+          <button class="tab" data-tab="file">Upload File</button>
+        </div>
+
+        <div class="tab-panel" data-panel="m3u">
+          <label>Name</label>
+          <input id="m3u-name" placeholder="My Playlist" />
+          <label>M3U / M3U8 URL</label>
+          <input id="m3u-url" placeholder="https://example.com/playlist.m3u" />
+          <button class="btn primary" id="m3u-save">Save</button>
+        </div>
+
+        <div class="tab-panel hidden" data-panel="xtream">
+          <label>Name</label>
+          <input id="xt-name" placeholder="My Provider" />
+          <label>Host (e.g. http://provider.tv:8080)</label>
+          <input id="xt-host" placeholder="http://host:port" />
+          <label>Username</label>
+          <input id="xt-user" />
+          <label>Password</label>
+          <input id="xt-pass" type="password" />
+          <button class="btn primary" id="xt-save">Save</button>
+        </div>
+
+        <div class="tab-panel hidden" data-panel="file">
+          <label>Name</label>
+          <input id="file-name" placeholder="Local Playlist" />
+          <label>Choose .m3u / .m3u8 file</label>
+          <input id="file-input" type="file" accept=".m3u,.m3u8,audio/x-mpegurl,application/vnd.apple.mpegurl" />
+          <button class="btn primary" id="file-save">Save</button>
+        </div>
+
+        <p id="modal-msg" class="muted"></p>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-card">
+        <header>
+          <h3>Settings</h3>
+          <button class="btn ghost" id="settings-close">✕</button>
+        </header>
+        <label>
+          <input type="checkbox" id="use-proxy" />
+          Route streams through server proxy (fixes CORS/region blocks)
+        </label>
+        <h4>Manage playlists</h4>
+        <ul id="playlist-manage"></ul>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
