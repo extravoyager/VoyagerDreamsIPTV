@@ -1,15 +1,18 @@
 :root {
-  --bg: #070912;
-  --panel: #0f1424;
-  --panel-2: #18203a;
-  --panel-3: #1f294a;
-  --border: #243049;
-  --text: #eef3fb;
-  --muted: #8a97b3;
-  --primary: #6c8cff;
-  --primary-2: #4a6dff;
-  --accent: #ffc857;
-  --danger: #ff6b6b;
+  --bg: #0d1117;
+  --panel: #161b25;
+  --panel-2: #1c2231;
+  --panel-3: #283143;
+  --panel-4: #364159;
+  --border: #2d3748;
+  --text: #eaf0f6;
+  --muted: #8b97a8;
+  --primary: #14b8a6;
+  --primary-2: #0d9488;
+  --accent: #f59e0b;
+  --accent-2: #fbbf24;
+  --highlight: #fb7185;
+  --danger: #ef4444;
   --radius: 10px;
 }
 
@@ -81,10 +84,11 @@ body {
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--primary), #b16cff);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
   border-radius: 8px;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 800;
+  color: #0d1117;
+  letter-spacing: 0.5px;
 }
 
 .actions {
@@ -237,9 +241,9 @@ body {
   color: var(--text);
 }
 .kind-tab.active {
-  background: linear-gradient(135deg, var(--primary-2), #7a4dff);
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
   color: #fff;
-  box-shadow: 0 4px 14px rgba(74, 109, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
 }
 .kind-tab.active .count {
   background: rgba(255, 255, 255, 0.22);
@@ -276,8 +280,9 @@ body {
   opacity: 1;
 }
 .channel-list li.active {
-  background: linear-gradient(90deg, var(--primary-2), rgba(74, 109, 255, 0.4));
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.32), rgba(20, 184, 166, 0.08));
   box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--text);
 }
 .channel-list li.active .ch-group {
   color: rgba(255, 255, 255, 0.7);
@@ -324,60 +329,90 @@ body {
 /* Grid layout for movies/series posters */
 .channel-list.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 8px;
-  padding: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-auto-rows: 210px;
+  gap: 10px;
+  padding: 10px;
+  align-content: start;
 }
 .channel-list.grid li {
-  flex-direction: column;
-  align-items: stretch;
+  display: grid;
+  grid-template-rows: 1fr auto;
   padding: 0;
-  background: var(--bg);
+  background: var(--panel-3);
   border: 1px solid var(--border);
   overflow: hidden;
-  aspect-ratio: 2 / 3.2;
+  border-radius: 10px;
+  transition: transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+  position: relative;
 }
 .channel-list.grid li:hover {
   transform: translateY(-2px);
   border-color: var(--primary);
+  box-shadow: 0 6px 18px rgba(20, 184, 166, 0.18);
 }
 .channel-list.grid li.active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 18px rgba(245, 158, 11, 0.25);
 }
 .channel-list.grid .ch-logo {
   width: 100%;
-  height: 70%;
+  height: 100%;
+  min-height: 140px;
   border-radius: 0;
   border: none;
   background-size: cover;
-  font-size: 28px;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .channel-list.grid .ch-meta {
-  padding: 6px 8px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.25));
+  flex-direction: column;
+  gap: 2px;
 }
 .channel-list.grid .ch-name {
   font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
   white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text);
 }
 .channel-list.grid .ch-group {
-  display: none;
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .channel-list.grid .fav-btn {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  background: rgba(0, 0, 0, 0.55);
+  top: 6px;
+  right: 6px;
+  background: rgba(13, 17, 23, 0.7);
+  backdrop-filter: blur(4px);
   border-radius: 50%;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.85;
+  opacity: 1;
+  z-index: 2;
+}
+.channel-list.grid li.active .ch-name {
+  color: var(--text);
 }
 
 .fav-btn {

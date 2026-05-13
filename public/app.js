@@ -14,6 +14,19 @@
     mpegts: null,
   };
 
+  // ----- Helpers -----
+  function stringHue(s) {
+    let h = 0;
+    for (let i = 0; i < (s || '').length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+    return h;
+  }
+  function initials(name) {
+    if (!name) return '?';
+    const parts = name.replace(/[\[\]()|.,:\-_/\\]+/g, ' ').trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
   // ----- Toast -----
   let toastTimer;
   function toast(msg, type = 'info') {
@@ -227,8 +240,13 @@
 
       const logo = document.createElement('div');
       logo.className = 'ch-logo';
-      if (c.logo) logo.style.backgroundImage = `url("${c.logo}")`;
-      else logo.textContent = (c.name || '?').slice(0, 1).toUpperCase();
+      if (c.logo) {
+        logo.style.backgroundImage = `url("${c.logo}")`;
+      } else {
+        const hue = stringHue(c.name);
+        logo.style.background = `linear-gradient(135deg, hsl(${hue},58%,42%), hsl(${(hue + 35) % 360},62%,28%))`;
+        logo.textContent = initials(c.name);
+      }
 
       const meta = document.createElement('div');
       meta.className = 'ch-meta';
