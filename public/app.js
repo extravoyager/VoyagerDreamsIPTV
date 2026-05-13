@@ -389,7 +389,20 @@
 
   // ----- Playlist management -----
   async function fetchPlaylistText(url) {
-    const res = await fetch('/playlist?url=' + encodeURIComponent(url));
+    const cleaned = url.replace(/&amp;/g, '&').trim();
+    const endpoint = '/playlist?url=' + encodeURIComponent(cleaned);
+    let res;
+    try {
+      res = await fetch(endpoint);
+    } catch (e) {
+      // Browser-level network failure — typically server unreachable, sleeping
+      // Railway service, offline, or a content-blocker extension.
+      throw new Error(
+        'Cannot reach the playlist proxy on this server (' +
+          e.message +
+          '). If you just deployed, wait for the service to wake up, then retry.'
+      );
+    }
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
       try {

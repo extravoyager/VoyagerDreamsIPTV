@@ -6,7 +6,20 @@ const { URL } = require('url');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '2mb' }));
+// Never let an uncaught error kill the process — log and continue.
+process.on('uncaughtException', (e) => console.error('uncaughtException:', e));
+process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e));
+
+app.use(express.json({ limit: '4mb' }));
+app.use((req, _res, next) => {
+  if (req.path === '/playlist' || req.path === '/proxy' || req.path === '/xtream') {
+    console.log(
+      `[${new Date().toISOString()}] ${req.method} ${req.path}` +
+        (req.query.url ? ` url=${req.query.url.slice(0, 120)}` : '')
+    );
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Simple CORS-bypass proxy for playlists and stream segments.
@@ -136,17 +149,21 @@ app.get('/playlist', async (req, res) => {
         if (![401, 403, 406, 429].includes(upstream.status)) break;
         continue;
       }
-      const text = await upstream.text();
+      // Stream and cap at 100MB to avoid OOM on a runaway provider.
+      const MAX_BYTES = 100 * 1024 * 1024;
+      const chunks = [];
+      let total = 0;
+      for await (const chunk of upstream.body) {
+        total += chunk.length;
+        if (total > MAX_BYTES) {
+          throw new Error('Playlist exceeds 100MB limit');
+        }
+        chunks.push(chunk);
+      }
+      const text = Buffer.concat(chunks).toString('utf8');
       if (!text.trim()) {
         lastError = 'Empty response from server';
         continue;
-      }
-      if (!/^\s*#EXTM3U/m.test(text) && !text.includes('#EXTINF')) {
-        lastError =
-          'Response does not look like an M3U playlist (first 200 chars: ' +
-          text.slice(0, 200).replace(/\s+/g, ' ').trim() +
-          ')';
-        // Still return it — some providers omit the header.
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Access-Control-Allow-Origin', '*');
