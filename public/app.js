@@ -388,14 +388,37 @@
   }
 
   // ----- Playlist management -----
+  async function fetchPlaylistText(url) {
+    const res = await fetch('/playlist?url=' + encodeURIComponent(url));
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data && data.error) detail = data.error;
+      } catch (_) {
+        try {
+          detail = (await res.text()) || detail;
+        } catch (_) {}
+      }
+      throw new Error(detail);
+    }
+    return res.text();
+  }
+
   async function addM3UPlaylist(name, url) {
+    // Fetch & parse BEFORE saving so a bad URL doesn't pollute storage.
+    const text = await fetchPlaylistText(url);
+    const channels = parseM3U(text);
+    if (!channels.length) throw new Error('Playlist contained no entries');
     const id = 'pl_' + Date.now();
-    const playlist = { id, name: name || 'Playlist', type: 'm3u', url };
-    state.playlists.push(playlist);
+    state.playlists.push({ id, name: name || 'Playlist', type: 'm3u', url });
     state.activePlaylistId = id;
+    state.channels = channels;
     saveStorage();
     renderPlaylistSelect();
-    await loadActivePlaylist();
+    renderCategories();
+    applyFilters();
+    toast(`Loaded ${channels.length} items from "${name || 'Playlist'}"`, 'info');
   }
 
   function addInlinePlaylist(name, text) {
@@ -421,22 +444,15 @@
       renderCategories();
       return;
     }
-    let text = '';
     $('#loader').classList.remove('hidden');
     try {
-      if (pl.type === 'inline') {
-        text = pl.text;
-      } else {
-        const res = await fetch('/playlist?url=' + encodeURIComponent(pl.url));
-        if (!res.ok) throw new Error('Failed to fetch (HTTP ' + res.status + ')');
-        text = await res.text();
-      }
+      const text = pl.type === 'inline' ? pl.text : await fetchPlaylistText(pl.url);
       state.channels = parseM3U(text);
       toast(`Loaded ${state.channels.length} items from "${pl.name}"`, 'info');
       renderCategories();
       applyFilters();
     } catch (e) {
-      toast('Failed to load playlist: ' + e.message, 'error');
+      toast('Failed to load "' + pl.name + '": ' + e.message, 'error');
     } finally {
       $('#loader').classList.add('hidden');
     }
@@ -480,6 +496,7 @@
   function openModal() {
     $('#modal').classList.remove('hidden');
     $('#modal-msg').textContent = '';
+    $('#modal-msg').classList.remove('error');
   }
   function closeModal() {
     $('#modal').classList.add('hidden');
@@ -513,18 +530,30 @@
     });
 
     $('#m3u-save').addEventListener('click', async () => {
+      const btn = $('#m3u-save');
       const name = $('#m3u-name').value.trim();
       const url = $('#m3u-url').value.trim();
       if (!url) {
         $('#modal-msg').textContent = 'Please enter a URL.';
         return;
       }
-      $('#modal-msg').textContent = 'Loading...';
-      await addM3UPlaylist(name, url);
-      closeModal();
+      btn.disabled = true;
+      $('#modal-msg').textContent = 'Fetching playlist...';
+      $('#loader').classList.remove('hidden');
+      try {
+        await addM3UPlaylist(name, url);
+        closeModal();
+      } catch (e) {
+        $('#modal-msg').textContent = 'Failed: ' + e.message;
+        $('#modal-msg').classList.add('error');
+      } finally {
+        btn.disabled = false;
+        $('#loader').classList.add('hidden');
+      }
     });
 
     $('#xt-save').addEventListener('click', async () => {
+      const btn = $('#xt-save');
       const name = $('#xt-name').value.trim();
       const host = $('#xt-host').value.trim();
       const username = $('#xt-user').value.trim();
@@ -533,7 +562,9 @@
         $('#modal-msg').textContent = 'Fill all fields.';
         return;
       }
-      $('#modal-msg').textContent = 'Connecting...';
+      btn.disabled = true;
+      $('#modal-msg').textContent = 'Connecting to provider...';
+      $('#loader').classList.remove('hidden');
       try {
         const res = await fetch('/xtream', {
           method: 'POST',
@@ -546,6 +577,10 @@
         closeModal();
       } catch (e) {
         $('#modal-msg').textContent = 'Error: ' + e.message;
+        $('#modal-msg').classList.add('error');
+      } finally {
+        btn.disabled = false;
+        $('#loader').classList.add('hidden');
       }
     });
 

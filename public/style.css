@@ -639,6 +639,17 @@ body {
   }
 }
 
+#modal-msg.error {
+  color: var(--danger);
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  word-break: break-word;
+}
+
 #playlist-manage {
   list-style: none;
   padding: 0;

@@ -94,31 +94,72 @@ app.get('/proxy', async (req, res) => {
 // Fetch and return a playlist's text content (used by the client to parse M3U).
 app.get('/playlist', async (req, res) => {
   const target = req.query.url;
-  if (!target) return res.status(400).send('Missing url parameter');
+  if (!target) return res.status(400).json({ error: 'Missing url parameter' });
   let parsed;
   try {
     parsed = new URL(target);
   } catch {
-    return res.status(400).send('Invalid url');
+    return res.status(400).json({ error: 'Invalid url' });
   }
   if (!['http:', 'https:'].includes(parsed.protocol)) {
-    return res.status(400).send('Only http/https allowed');
+    return res.status(400).json({ error: 'Only http/https allowed' });
   }
-  try {
-    const upstream = await fetch(parsed.toString(), {
-      headers: { 'User-Agent': 'VLC/3.0.0 LibVLC/3.0.0' },
-      redirect: 'follow',
-    });
-    if (!upstream.ok) {
-      return res.status(upstream.status).send('Upstream error');
+
+  // Some IPTV providers block VLC UA but accept browsers, and vice versa.
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+    'VLC/3.0.20 LibVLC/3.0.20',
+    'IPTVSmarters',
+  ];
+
+  let lastError = null;
+  for (const ua of userAgents) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const upstream = await fetch(parsed.toString(), {
+        headers: { 'User-Agent': ua, Accept: '*/*' },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!upstream.ok) {
+        // Read at most 512 bytes of the body for a useful error.
+        let snippet = '';
+        try {
+          snippet = (await upstream.text()).slice(0, 512);
+        } catch (_) {}
+        lastError = `HTTP ${upstream.status} ${upstream.statusText}${
+          snippet ? ' — ' + snippet.replace(/\s+/g, ' ').trim() : ''
+        }`;
+        // Retry with the next UA on 401/403/406; otherwise stop.
+        if (![401, 403, 406, 429].includes(upstream.status)) break;
+        continue;
+      }
+      const text = await upstream.text();
+      if (!text.trim()) {
+        lastError = 'Empty response from server';
+        continue;
+      }
+      if (!/^\s*#EXTM3U/m.test(text) && !text.includes('#EXTINF')) {
+        lastError =
+          'Response does not look like an M3U playlist (first 200 chars: ' +
+          text.slice(0, 200).replace(/\s+/g, ' ').trim() +
+          ')';
+        // Still return it — some providers omit the header.
+      }
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.send(text);
+    } catch (err) {
+      clearTimeout(timer);
+      lastError =
+        err.name === 'AbortError'
+          ? 'Request timed out after 30 seconds'
+          : err.message;
     }
-    const text = await upstream.text();
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.send(text);
-  } catch (err) {
-    res.status(502).send('Fetch failed: ' + err.message);
   }
+  res.status(502).json({ error: lastError || 'Failed to fetch playlist' });
 });
 
 // Xtream Codes helper: build an M3U URL from credentials.
