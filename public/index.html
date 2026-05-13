@@ -32,17 +32,20 @@
           <select id="playlist-select"></select>
         </div>
         <div class="kind-tabs">
-          <button class="kind-tab active" data-kind="all">
-            All <span class="count">0</span>
+          <button class="kind-tab active" data-kind="all" title="All">
+            <span class="ico">▦</span><span class="lbl">All</span><span class="count">0</span>
           </button>
-          <button class="kind-tab" data-kind="live">
-            Live <span class="count">0</span>
+          <button class="kind-tab" data-kind="live" title="Live TV">
+            <span class="ico">●</span><span class="lbl">Live</span><span class="count">0</span>
           </button>
-          <button class="kind-tab" data-kind="movie">
-            Movies <span class="count">0</span>
+          <button class="kind-tab" data-kind="movie" title="Movies">
+            <span class="ico">▶</span><span class="lbl">Movies</span><span class="count">0</span>
           </button>
-          <button class="kind-tab" data-kind="series">
-            Series <span class="count">0</span>
+          <button class="kind-tab" data-kind="series" title="Series">
+            <span class="ico">▤</span><span class="lbl">Series</span><span class="count">0</span>
+          </button>
+          <button class="kind-tab" data-kind="fav" title="Bookmarks">
+            <span class="ico">★</span><span class="lbl">Saved</span><span class="count">0</span>
           </button>
         </div>
         <div class="sidebar-section">
@@ -77,6 +80,10 @@
           <div class="np-meta">
             <div id="np-name" class="np-name">Nothing playing</div>
             <div id="np-group" class="np-group muted"></div>
+          </div>
+          <div class="np-actions">
+            <button id="np-fav" class="icon-btn" title="Bookmark">☆</button>
+            <button id="np-fullscreen" class="icon-btn" title="Fullscreen">⛶</button>
           </div>
         </div>
       </section>

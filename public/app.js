@@ -8,6 +8,7 @@
     channels: [],
     filteredChannels: [],
     activeChannelId: null,
+    favorites: {},
     settings: { useProxy: false },
     hls: null,
   };
@@ -22,6 +23,7 @@
       const data = JSON.parse(raw);
       state.playlists = data.playlists || [];
       state.activePlaylistId = data.activePlaylistId || null;
+      state.favorites = data.favorites || {};
       state.settings = Object.assign(state.settings, data.settings || {});
     } catch (e) {
       console.warn('Failed to load storage', e);
@@ -34,6 +36,7 @@
       JSON.stringify({
         playlists: state.playlists,
         activePlaylistId: state.activePlaylistId,
+        favorites: state.favorites,
         settings: state.settings,
       })
     );
@@ -137,15 +140,44 @@
     return active ? active.dataset.kind : 'all';
   }
 
+  function favKey(c) {
+    return c.url;
+  }
+  function isFav(c) {
+    return !!state.favorites[favKey(c)];
+  }
+  function toggleFav(c) {
+    const k = favKey(c);
+    if (state.favorites[k]) {
+      delete state.favorites[k];
+    } else {
+      state.favorites[k] = {
+        name: c.name,
+        logo: c.logo,
+        group: c.group,
+        kind: c.kind,
+        url: c.url,
+      };
+    }
+    saveStorage();
+  }
+
   function updateKindCounts() {
-    const counts = { all: state.channels.length, live: 0, movie: 0, series: 0 };
+    const counts = {
+      all: state.channels.length,
+      live: 0,
+      movie: 0,
+      series: 0,
+      fav: Object.keys(state.favorites).length,
+    };
     state.channels.forEach((c) => {
       counts[c.kind] = (counts[c.kind] || 0) + 1;
     });
     document.querySelectorAll('.kind-tab').forEach((t) => {
       const k = t.dataset.kind;
       const c = counts[k] || 0;
-      t.querySelector('.count').textContent = c;
+      const el = t.querySelector('.count');
+      if (el) el.textContent = c;
     });
   }
 
@@ -153,8 +185,16 @@
     const q = $('#search').value.trim().toLowerCase();
     const cat = $('#category-select').value;
     const kind = currentKind();
-    state.filteredChannels = state.channels.filter((c) => {
-      if (kind !== 'all' && c.kind !== kind) return false;
+    let source = state.channels;
+    if (kind === 'fav') {
+      const present = new Map(state.channels.map((c) => [c.url, c]));
+      source = Object.values(state.favorites).map((f) => present.get(f.url) || {
+        id: 'fav_' + f.url,
+        ...f,
+      });
+    }
+    state.filteredChannels = source.filter((c) => {
+      if (kind !== 'all' && kind !== 'fav' && c.kind !== kind) return false;
       if (cat && c.group !== cat) return false;
       if (q && !c.name.toLowerCase().includes(q)) return false;
       return true;
@@ -165,25 +205,52 @@
   function renderChannels() {
     const ul = $('#channel-list');
     ul.innerHTML = '';
-    const list = state.filteredChannels.slice(0, 800); // cap for perf
+    const kind = currentKind();
+    ul.classList.toggle('grid', kind === 'movie' || kind === 'series');
+    const list = state.filteredChannels.slice(0, 800);
     list.forEach((c) => {
       const li = document.createElement('li');
       li.dataset.id = c.id;
       if (c.id === state.activeChannelId) li.classList.add('active');
+
       const logo = document.createElement('div');
       logo.className = 'ch-logo';
       if (c.logo) logo.style.backgroundImage = `url("${c.logo}")`;
+      else logo.textContent = (c.name || '?').slice(0, 1).toUpperCase();
+
+      const meta = document.createElement('div');
+      meta.className = 'ch-meta';
       const name = document.createElement('div');
       name.className = 'ch-name';
       name.textContent = c.name;
+      const group = document.createElement('div');
+      group.className = 'ch-group';
+      group.textContent = c.group || '';
+      meta.appendChild(name);
+      meta.appendChild(group);
+
+      const star = document.createElement('button');
+      star.className = 'fav-btn' + (isFav(c) ? ' on' : '');
+      star.title = isFav(c) ? 'Remove bookmark' : 'Bookmark';
+      star.innerHTML = isFav(c) ? '★' : '☆';
+      star.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFav(c);
+        star.classList.toggle('on');
+        star.innerHTML = isFav(c) ? '★' : '☆';
+        updateKindCounts();
+        if (currentKind() === 'fav') applyFilters();
+      });
+
       li.appendChild(logo);
-      li.appendChild(name);
+      li.appendChild(meta);
+      li.appendChild(star);
       li.addEventListener('click', () => playChannel(c));
       ul.appendChild(li);
     });
-    $('#channel-count').textContent = `(${state.filteredChannels.length}${
-      state.filteredChannels.length > list.length ? ' — showing 800' : ''
-    })`;
+    $('#channel-count').textContent = `${state.filteredChannels.length}${
+      state.filteredChannels.length > list.length ? ' (showing 800)' : ''
+    }`;
   }
 
   function setNowPlaying(c) {
@@ -191,6 +258,16 @@
     $('#np-group').textContent = c ? c.group : '';
     const logoEl = $('#np-logo');
     logoEl.style.backgroundImage = c && c.logo ? `url("${c.logo}")` : '';
+    const fav = $('#np-fav');
+    if (c) {
+      fav.innerHTML = isFav(c) ? '★' : '☆';
+      fav.classList.toggle('on', isFav(c));
+      fav.dataset.url = c.url;
+    } else {
+      fav.innerHTML = '☆';
+      fav.classList.remove('on');
+      delete fav.dataset.url;
+    }
   }
 
   // ----- Player -----
@@ -439,6 +516,35 @@
     $('#use-proxy').addEventListener('change', (e) => {
       state.settings.useProxy = e.target.checked;
       saveStorage();
+    });
+
+    $('#np-fav').addEventListener('click', () => {
+      const url = $('#np-fav').dataset.url;
+      if (!url) return;
+      const c = state.channels.find((x) => x.url === url) ||
+        state.favorites[url];
+      if (!c) return;
+      toggleFav(c);
+      setNowPlaying(c);
+      updateKindCounts();
+      renderChannels();
+    });
+
+    $('#np-fullscreen').addEventListener('click', () => {
+      const v = $('#video');
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (v.requestFullscreen) v.requestFullscreen();
+      else if (v.webkitEnterFullscreen) v.webkitEnterFullscreen();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.key === 'f') $('#np-fullscreen').click();
+      if (e.key === 'b') $('#np-fav').click();
+      if (e.key === '/') {
+        e.preventDefault();
+        $('#search').focus();
+      }
     });
   }
 
